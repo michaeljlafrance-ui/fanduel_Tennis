@@ -14,28 +14,29 @@ hd = {
     "Content-Type": "application/json"
 }
 
-mode = st.sidebar.selectbox("Mode", ["Scan", "Diag"])
+# Interactive input field to dynamically override sport filtering strings
+sport_key = st.sidebar.text_input("Sport Target Key", value="Tennis")
+status_key = st.sidebar.text_input("Status Target Key", value="live")
 
 if st.button("🚀 Run Scan", type="primary"):
     try:
-        if mode == "Diag":
-            u_dg = f"https://{H}/v2/events"
-            p_dg = {"status": "live", "sport": "Tennis"}
-            r_dg = requests.get(u_dg, headers=hd, params=p_dg)
-            st.code(r_dg.text)
-            st.stop()
-            
+        # STEP 1: Fetch Events
         u1 = f"https://{H}/v2/events"
-        p1 = {"status": "live", "sport": "Tennis"}
+        p1 = {"status": status_key, "sport": sport_key}
         res = requests.get(u1, headers=hd, params=p1)
         
-        if res.status_code == 404:
-            st.info("Zero live tennis matching route.")
+        if res.status_code != 200:
+            st.error(f"API Connection Error: {res.status_code}")
+            st.code(res.text)
             st.stop()
             
         data = res.json()
+        
+        # Diagnostic printout of what exactly returned from the network query
+        st.write("### Live Server Response Inspection:")
         if not data:
-            st.info("Empty match array.")
+            st.info(f"The endpoint returned a blank array for sport='{sport_key}' and status='{status_key}'.")
+            st.write("Try testing combinations like lowercase 'tennis' or changing status to 'pending,live' in the sidebar configuration.")
             st.stop()
             
         id_map = {}
@@ -50,15 +51,17 @@ if st.button("🚀 Run Scan", type="primary"):
                 }
                 
         if not id_list:
-            st.warning("No live IDs.")
+            st.warning("No live match IDs parsed from array.")
             st.stop()
             
+        # STEP 2: Bulk Odds
         u2 = f"https://{H}/v2/odds/multi"
         p2 = {"bookmakers": "FanDuel", "eventIds": ",".join(id_list)}
         ores = requests.get(u2, headers=hd, params=p2)
         odata = ores.json()
         rows = []
         
+        # STEP 3: Pure Flat Short-Line Parser
         for item in odata:
             if not item: continue
             mid = str(item.get('id', ''))
@@ -81,7 +84,6 @@ if st.button("🚀 Run Scan", type="primary"):
                 if price >= -130 and price <= 120:
                     alt = "🎯 TRIGGER"
                     
-                # Removed all functions to prevent parentheses clipping entirely
                 r = []
                 r.append(mid)
                 r.append(meta["L"])
@@ -96,7 +98,7 @@ if st.button("🚀 Run Scan", type="primary"):
             df = pd.DataFrame(rows, columns=cols)
             st.dataframe(df, use_container_width=True, hide_index=True)
         else:
-            st.info("No FanDuel ML lines.")
+            st.info("No FanDuel ML lines populated for these match indexes yet.")
             
     except Exception as e:
         st.error(f"Crash: {str(e)}")
