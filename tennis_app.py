@@ -14,38 +14,37 @@ hd = {
     "Content-Type": "application/json"
 }
 
-# Added diagnostic options to handle provider naming shifts dynamically
-mode = st.sidebar.selectbox("Select Target Scan Mode", ["Scan Active Courts", "Run Global Sports Diagnostic"])
+mode = st.sidebar.selectbox("Select Target Scan Mode", ["Scan Active Courts", "Raw Server Text Diagnostic"])
 
 if st.button("🚀 Execution Command", type="primary"):
     try:
-        if mode == "Run Global Sports Diagnostic":
-            # Direct look at what sports/strings are currently alive on the host server
-            diag_url = f"https://{H}/v2/sports"
-            dres = requests.get(diag_url, headers=hd)
-            st.write("### Active Provider Sports Keys Registry:")
-            st.json(dres.json())
+        if mode == "Raw Server Text Diagnostic":
+            # Testing direct text responses to see exact system routes without crash risk
+            u_diag = f"https://{H}/v2/events"
+            r_diag = requests.get(u_diag, headers=hd, params={"status": "live", "sport": "Tennis"})
+            st.write(f"### Server HTTP Status: {r_diag.status_code}")
+            st.write("### Raw Response Body:")
+            st.code(r_diag.text)
             st.stop()
             
-        # STEP 1: Fetch Tennis Events using the broadened status flag
+        # STEP 1: Fetch Live Tennis Events (Using strict Enum capitalization 'Tennis')
         u1 = f"https://{H}/v2/events"
-        p1 = {
-            "status": "pending,live", 
-            "sport": "tennis"
-        }
+        p1 = {"status": "live", "sport": "Tennis"}
         res = requests.get(u1, headers=hd, params=p1)
         
+        # Safe catch for zero live trading markets
         if res.status_code == 404:
-            st.info("No active tennis events found matching these explicit parameters.")
+            st.info("No live tennis matches are currently publishing data on this network route.")
             st.stop()
             
         if res.status_code != 200:
             st.error(f"API Connection Error: {res.status_code}")
+            st.code(res.text)
             st.stop()
             
         data = res.json()
         if not data:
-            st.info("The match list is currently trading blank for this sport string.")
+            st.info("No active tennis lines discovered in the current feed.")
             st.stop()
             
         id_map = {}
@@ -55,21 +54,21 @@ if st.button("🚀 Execution Command", type="primary"):
                 eid = str(ev['id'])
                 id_list.append(eid)
                 id_map[eid] = {
-                    "L": ev.get("league", "TENNIS TOUR"),
+                    "L": ev.get("league", "TENNIS"),
                     "M": f"{ev.get('away')} vs {ev.get('home')}"
                 }
                 
         if not id_list:
-            st.warning("No structural game indexes parsed.")
+            st.warning("No live matchup structures available to track.")
             st.stop()
             
-        # STEP 2: Bulk Fetch Live Odds
+        # STEP 2: Bulk Retrieve Odds
         u2 = f"https://{H}/v2/odds/multi"
         p2 = {"bookmakers": "FanDuel", "eventIds": ",".join(id_list)}
         ores = requests.get(u2, headers=hd, params=p2)
         
         if ores.status_code != 200:
-            st.error("Odds database pipeline offline.")
+            st.error("Odds pipeline down.")
             st.stop()
             
         odata = ores.json()
@@ -87,39 +86,4 @@ if st.button("🚀 Execution Command", type="primary"):
             if not fd:
                 continue
                 
-            mkts = fd.get('markets') or fd.get('h2h') or []
-            mkt = mkts[0] if isinstance(mkts, list) else mkts
-            if not mkt or 'outcomes' not in mkt:
-                continue
-                
-            for out in mkt['outcomes']:
-                price = out.get('price') or out.get('odds') or 0
-                name = out.get('name', 'Player')
-                
-                alt = "NORMAL"
-                if price >= -130 and price <= 120:
-                    alt = "🎯 RECOVERY TRIGGER: High-Value Spot"
-                    
-                r = []
-                r.append(mid)
-                r.append(meta["L"].upper())
-                r.append(meta["M"].upper())
-                r.append(name.upper())
-                r.append(price)
-                r.append(alt)
-                rows.append(r)
-                
-        if rows:
-            cols = ["ID", "Tour", "Matchup", "Selection", "Live Odds", "Alert Status"]
-            df = pd.DataFrame(rows, columns=cols)
-            
-            def highlight(v):
-                return 'background-color: #d4edda; color: #155724; font-weight: bold;' if 'TRIGGER' in str(v) else ''
-            
-            sdf = df.style.map(highlight, subset=['Alert Status'])
-            st.dataframe(sdf, use_container_width=True, hide_index=True)
-        else:
-            st.info("No active Moneyline markets found open on FanDuel for these events yet.")
-            
-    except Exception as e:
-        st.error(f"Engine Exception: {str(e)}")
+            mkts = fd.get('markets') or fd.
