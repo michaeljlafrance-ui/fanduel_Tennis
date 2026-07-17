@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 
 st.set_page_config(layout="wide")
-st.title("🎾 Live Tennis Favorite-Recovery Engine")
+st.title("🎾 Live Tennis Engine")
 
 K = "932206dd22mshf288a41328bab03p12d137jsn9b24ebdfb34c"
 H = "odds-api-io-real-time-sports-betting-odds-api.p.rapidapi.com"
@@ -14,37 +14,29 @@ hd = {
     "Content-Type": "application/json"
 }
 
-mode = st.sidebar.selectbox("Select Target Scan Mode", ["Scan Active Courts", "Raw Server Text Diagnostic"])
+mode = st.sidebar.selectbox("Mode", ["Scan", "Diag"])
 
-if st.button("🚀 Execution Command", type="primary"):
+if st.button("🚀 Run Scan", type="primary"):
     try:
-        if mode == "Raw Server Text Diagnostic":
-            # Testing direct text responses to see exact system routes without crash risk
-            u_diag = f"https://{H}/v2/events"
-            r_diag = requests.get(u_diag, headers=hd, params={"status": "live", "sport": "Tennis"})
-            st.write(f"### Server HTTP Status: {r_diag.status_code}")
-            st.write("### Raw Response Body:")
-            st.code(r_diag.text)
+        if mode == "Diag":
+            u_dg = f"https://{H}/v2/events"
+            p_dg = {"status": "live", "sport": "Tennis"}
+            r_dg = requests.get(u_dg, headers=hd, params=p_dg)
+            st.code(r_dg.text)
             st.stop()
             
-        # STEP 1: Fetch Live Tennis Events (Using strict Enum capitalization 'Tennis')
+        # STEP 1: Fetch Events
         u1 = f"https://{H}/v2/events"
         p1 = {"status": "live", "sport": "Tennis"}
         res = requests.get(u1, headers=hd, params=p1)
         
-        # Safe catch for zero live trading markets
         if res.status_code == 404:
-            st.info("No live tennis matches are currently publishing data on this network route.")
-            st.stop()
-            
-        if res.status_code != 200:
-            st.error(f"API Connection Error: {res.status_code}")
-            st.code(res.text)
+            st.info("Zero live tennis matching route.")
             st.stop()
             
         data = res.json()
         if not data:
-            st.info("No active tennis lines discovered in the current feed.")
+            st.info("Empty match array.")
             st.stop()
             
         id_map = {}
@@ -59,31 +51,42 @@ if st.button("🚀 Execution Command", type="primary"):
                 }
                 
         if not id_list:
-            st.warning("No live matchup structures available to track.")
+            st.warning("No live IDs.")
             st.stop()
             
-        # STEP 2: Bulk Retrieve Odds
+        # STEP 2: Bulk Odds
         u2 = f"https://{H}/v2/odds/multi"
         p2 = {"bookmakers": "FanDuel", "eventIds": ",".join(id_list)}
         ores = requests.get(u2, headers=hd, params=p2)
-        
-        if ores.status_code != 200:
-            st.error("Odds pipeline down.")
-            st.stop()
-            
         odata = ores.json()
         rows = []
         
-        # STEP 3: Parse Out Premium Value Targets
+        # STEP 3: Pure Flat Short-Line Parser
         for item in odata:
-            if not item or 'bookmakers' not in item:
-                continue
-            mid = str(item.get('id', item.get('eventId', '')))
-            meta = id_map.get(mid, {"L": "ATP/WTA", "M": "LIVE MATCH"})
+            if not item: continue
+            mid = str(item.get('id', ''))
+            meta = id_map.get(mid, {"L": "ATP", "M": "MATCH"})
             
-            bm = item['bookmakers']
+            bm = item.get('bookmakers', {})
             fd = bm.get('fanduel') or bm.get('FanDuel')
-            if not fd:
-                continue
+            if not fd: continue
+            
+            # Shortened dictionary safety net
+            mkts = fd.get('markets', [])
+            if not mkts: continue
+            mkt = mkts[0] if isinstance(mkts, list) else mkts
+            outcomes = mkt.get('outcomes', [])
+            
+            for out in outcomes:
+                price = out.get('price', 0)
+                name = out.get('name', 'Player')
                 
-            mkts = fd.get('markets') or fd.
+                alt = "NORMAL"
+                if price >= -130 and price <= 120:
+                    alt = "🎯 TRIGGER"
+                    
+                r = []
+                r.append(mid)
+                r.append(meta["L"].upper())
+                r.append(meta["M"].upper())
+                r.append(name.upper
