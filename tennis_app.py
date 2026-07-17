@@ -14,29 +14,36 @@ hd = {
     "Content-Type": "application/json"
 }
 
-# Interactive input field to dynamically override sport filtering strings
-sport_key = st.sidebar.text_input("Sport Target Key", value="Tennis")
-status_key = st.sidebar.text_input("Status Target Key", value="live")
+# Pre-populated sidebar values set up to conform to standard server constraints
+sport_key = st.sidebar.text_input("Sport Target Key", value="tennis")
+status_key = st.sidebar.text_input("Status Target Key", value="pending,live")
+league_key = st.sidebar.text_input("League Target Key", value="atp-gstaad")
 
 if st.button("🚀 Run Scan", type="primary"):
     try:
         # STEP 1: Fetch Events
         u1 = f"https://{H}/v2/events"
-        p1 = {"status": status_key, "sport": sport_key}
+        p1 = {
+            "status": status_key, 
+            "sport": sport_key,
+            "league": league_key
+        }
         res = requests.get(u1, headers=hd, params=p1)
         
+        # Friendly catch if the specific league string isn't trading at this millisecond
+        if res.status_code == 404:
+            st.info(f"The league string '{league_key}' is not actively publishing live data right now.")
+            st.write("Try updating the sidebar to 'atp' or clear the field to scan broad categories.")
+            st.stop()
+            
         if res.status_code != 200:
             st.error(f"API Connection Error: {res.status_code}")
             st.code(res.text)
             st.stop()
             
         data = res.json()
-        
-        # Diagnostic printout of what exactly returned from the network query
-        st.write("### Live Server Response Inspection:")
         if not data:
-            st.info(f"The endpoint returned a blank array for sport='{sport_key}' and status='{status_key}'.")
-            st.write("Try testing combinations like lowercase 'tennis' or changing status to 'pending,live' in the sidebar configuration.")
+            st.info("No games matching search parameters.")
             st.stop()
             
         id_map = {}
@@ -51,7 +58,7 @@ if st.button("🚀 Run Scan", type="primary"):
                 }
                 
         if not id_list:
-            st.warning("No live match IDs parsed from array.")
+            st.warning("No structural game IDs parsed.")
             st.stop()
             
         # STEP 2: Bulk Odds
@@ -98,7 +105,7 @@ if st.button("🚀 Run Scan", type="primary"):
             df = pd.DataFrame(rows, columns=cols)
             st.dataframe(df, use_container_width=True, hide_index=True)
         else:
-            st.info("No FanDuel ML lines populated for these match indexes yet.")
+            st.info("No FanDuel Moneyline options open for these matches currently.")
             
     except Exception as e:
         st.error(f"Crash: {str(e)}")
