@@ -14,32 +14,38 @@ hd = {
     "Content-Type": "application/json"
 }
 
-# Diagnostic toggle to view raw server strings if needed
-show_raw = st.sidebar.checkbox("Show Raw API Payload Diagnostics")
+# Added diagnostic options to handle provider naming shifts dynamically
+mode = st.sidebar.selectbox("Select Target Scan Mode", ["Scan Active Courts", "Run Global Sports Diagnostic"])
 
-if st.button("🔄 Scan Live Tennis Courts", type="primary"):
+if st.button("🚀 Execution Command", type="primary"):
     try:
-        # STEP 1: Fetch Live Tennis Events (Corrected to strict uppercase 'Tennis')
+        if mode == "Run Global Sports Diagnostic":
+            # Direct look at what sports/strings are currently alive on the host server
+            diag_url = f"https://{H}/v2/sports"
+            dres = requests.get(diag_url, headers=hd)
+            st.write("### Active Provider Sports Keys Registry:")
+            st.json(dres.json())
+            st.stop()
+            
+        # STEP 1: Fetch Tennis Events using the broadened status flag
         u1 = f"https://{H}/v2/events"
-        p1 = {"status": "live", "sport": "Tennis"}
+        p1 = {
+            "status": "pending,live", 
+            "sport": "tennis"
+        }
         res = requests.get(u1, headers=hd, params=p1)
         
         if res.status_code == 404:
-            st.info("No active live tennis matches found on this endpoint path.")
+            st.info("No active tennis events found matching these explicit parameters.")
             st.stop()
             
         if res.status_code != 200:
-            st.error(f"API Error Code: {res.status_code} - {res.text}")
+            st.error(f"API Connection Error: {res.status_code}")
             st.stop()
             
         data = res.json()
-        
-        if show_raw:
-            st.subheader("🛠️ Raw Events JSON Payload")
-            st.json(data)
-            
         if not data:
-            st.info("No live tennis events matching active trading data right now.")
+            st.info("The match list is currently trading blank for this sport string.")
             st.stop()
             
         id_map = {}
@@ -49,15 +55,15 @@ if st.button("🔄 Scan Live Tennis Courts", type="primary"):
                 eid = str(ev['id'])
                 id_list.append(eid)
                 id_map[eid] = {
-                    "L": ev.get("league", "TENNIS"),
+                    "L": ev.get("league", "TENNIS TOUR"),
                     "M": f"{ev.get('away')} vs {ev.get('home')}"
                 }
                 
         if not id_list:
-            st.warning("No structural match IDs recovered from active events.")
+            st.warning("No structural game indexes parsed.")
             st.stop()
             
-        # STEP 2: Bulk Fetch Live Odds (Looking for H2H/Moneyline)
+        # STEP 2: Bulk Fetch Live Odds
         u2 = f"https://{H}/v2/odds/multi"
         p2 = {"bookmakers": "FanDuel", "eventIds": ",".join(id_list)}
         ores = requests.get(u2, headers=hd, params=p2)
@@ -67,14 +73,9 @@ if st.button("🔄 Scan Live Tennis Courts", type="primary"):
             st.stop()
             
         odata = ores.json()
-        
-        if show_raw:
-            st.subheader("🛠️ Raw Odds Multi JSON Payload")
-            st.json(odata)
-            
         rows = []
         
-        # STEP 3: Parse Out Value Deviations
+        # STEP 3: Parse Out Premium Value Targets
         for item in odata:
             if not item or 'bookmakers' not in item:
                 continue
@@ -96,7 +97,6 @@ if st.button("🔄 Scan Live Tennis Courts", type="primary"):
                 name = out.get('name', 'Player')
                 
                 alt = "NORMAL"
-                # Flagging pre-match heavy favorites dipping into optimal recovery pricing
                 if price >= -130 and price <= 120:
                     alt = "🎯 RECOVERY TRIGGER: High-Value Spot"
                     
@@ -119,9 +119,7 @@ if st.button("🔄 Scan Live Tennis Courts", type="primary"):
             sdf = df.style.map(highlight, subset=['Alert Status'])
             st.dataframe(sdf, use_container_width=True, hide_index=True)
         else:
-            st.info("No live Head-to-Head moneyline markets open on FanDuel for these events.")
+            st.info("No active Moneyline markets found open on FanDuel for these events yet.")
             
     except Exception as e:
         st.error(f"Engine Exception: {str(e)}")
-else:
-    st.write("Click the button above to scan active tennis courts.")
