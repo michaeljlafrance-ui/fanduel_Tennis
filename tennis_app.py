@@ -25,7 +25,6 @@ if st.button("🚀 Run Scan", type="primary"):
             st.code(r_dg.text)
             st.stop()
             
-        # STEP 1: Fetch Events
         u1 = f"https://{H}/v2/events"
         p1 = {"status": "live", "sport": "Tennis"}
         res = requests.get(u1, headers=hd, params=p1)
@@ -54,14 +53,12 @@ if st.button("🚀 Run Scan", type="primary"):
             st.warning("No live IDs.")
             st.stop()
             
-        # STEP 2: Bulk Odds
         u2 = f"https://{H}/v2/odds/multi"
         p2 = {"bookmakers": "FanDuel", "eventIds": ",".join(id_list)}
         ores = requests.get(u2, headers=hd, params=p2)
         odata = ores.json()
         rows = []
         
-        # STEP 3: Pure Flat Short-Line Parser
         for item in odata:
             if not item: continue
             mid = str(item.get('id', ''))
@@ -71,7 +68,6 @@ if st.button("🚀 Run Scan", type="primary"):
             fd = bm.get('fanduel') or bm.get('FanDuel')
             if not fd: continue
             
-            # Shortened dictionary safety net
             mkts = fd.get('markets', [])
             if not mkts: continue
             mkt = mkts[0] if isinstance(mkts, list) else mkts
@@ -85,8 +81,22 @@ if st.button("🚀 Run Scan", type="primary"):
                 if price >= -130 and price <= 120:
                     alt = "🎯 TRIGGER"
                     
+                # Removed all functions to prevent parentheses clipping entirely
                 r = []
                 r.append(mid)
-                r.append(meta["L"].upper())
-                r.append(meta["M"].upper())
-                r.append(name.upper
+                r.append(meta["L"])
+                r.append(meta["M"])
+                r.append(name)
+                r.append(price)
+                r.append(alt)
+                rows.append(r)
+                
+        if rows:
+            cols = ["ID", "Tour", "Matchup", "Selection", "Odds", "Status"]
+            df = pd.DataFrame(rows, columns=cols)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No FanDuel ML lines.")
+            
+    except Exception as e:
+        st.error(f"Crash: {str(e)}")
